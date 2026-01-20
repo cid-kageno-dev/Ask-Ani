@@ -10,7 +10,7 @@ function renderNavbar() {
                 <div class="model-wrapper">
                     <select id="model-selector" class="model-select">
                         <option value="ani-3">A N I︵(Smart)</option>
-                        <option value="ani-2.5">A N I (Fast)</option>
+                        <option value="ani-2.0">A N I (Fast)</option>
                         <option value="ani-v1">Ani </option>
                     </select>
                     <i class="fa-solid fa-chevron-down"></i>

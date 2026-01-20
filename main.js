@@ -66,45 +66,66 @@ let isVoiceOutputEnabled = false;
 const audioPlayer = new Audio();
 
 /* ====================================
-   SPEECH RECOGNITION (Dictation Only)
+   SPEECH RECOGNITION (With Auto-Send)
    ==================================== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
+let silenceTimer = null;
+const SILENCE_TIMEOUT = 2000; // 2 Seconds silence = Auto Send
 
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.continuous = false; // Stop after one sentence
+    recognition.continuous = false; 
     recognition.lang = "en-US";
-    recognition.interimResults = true;
+    recognition.interimResults = true; // Use interim to detect "still talking"
 
-    recognition.onstart = () => micBtn.classList.add("mic-active");
-    recognition.onend = () => micBtn.classList.remove("mic-active");
+    recognition.onstart = () => {
+        micBtn.classList.add("mic-active");
+        input.placeholder = "Listening...";
+    };
+
+    recognition.onend = () => {
+        micBtn.classList.remove("mic-active");
+        input.placeholder = "Message...";
+        clearTimeout(silenceTimer); // Safety clear
+    };
 
     recognition.onresult = (event) => {
         const transcript = Array.from(event.results)
             .map(result => result[0].transcript)
             .join('');
+
         input.value = transcript;
-        input.dispatchEvent(new Event('input')); // Trigger resize logic
+        input.dispatchEvent(new Event('input')); // Resize box
         toggleSendButton();
+
+        // --- AUTO SEND LOGIC ---
+        clearTimeout(silenceTimer); // Reset timer while talking
+        
+        if (transcript.trim().length > 0) {
+            silenceTimer = setTimeout(() => {
+                recognition.stop(); // Stop listening
+                sendMessage();      // Send automatically
+            }, SILENCE_TIMEOUT);
+        }
     };
 
-    micBtn.onclick = () => recognition.start();
+    micBtn.onclick = () => {
+        input.value = ""; // Clear input for fresh dictation
+        recognition.start();
+    };
 } else {
-    micBtn.style.display = 'none'; // Hide if browser doesn't support it
+    micBtn.style.display = 'none';
 }
 
 /* ====================================
-   VOICE TOGGLE
+   VOICE TOGGLE (Output)
    ==================================== */
 voiceToggleBtn.onclick = () => {
     isVoiceOutputEnabled = !isVoiceOutputEnabled;
-    // Update Icon
     voiceToggleBtn.innerHTML = isVoiceOutputEnabled 
         ? '<i class="fa-solid fa-volume-high"></i>' 
         : '<i class="fa-solid fa-volume-xmark"></i>';
-        
-    // Stop audio if turning off
     if(!isVoiceOutputEnabled) {
         audioPlayer.pause();
         audioPlayer.currentTime = 0;
@@ -116,13 +137,10 @@ voiceToggleBtn.onclick = () => {
    ==================================== */
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;
-    
     audioPlayer.pause();
-
     const cleanText = text.replace(/[*#]/g, '').trim();
     if (!cleanText) return;
 
-    // Google Translate TTS (Free API Hack)
     const encodedText = encodeURIComponent(cleanText);
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
 
@@ -130,7 +148,6 @@ function speakText(text) {
     audioPlayer.playbackRate = 1.1; 
     audioPlayer.play();
     
-    // Fallback
     audioPlayer.onerror = () => {
         const fallback = new SpeechSynthesisUtterance(cleanText);
         window.speechSynthesis.speak(fallback);
@@ -184,6 +201,9 @@ function addMessage(text, type, imgData = null) {
 }
 
 async function sendMessage() {
+    // 1. Clear any pending auto-send timers
+    clearTimeout(silenceTimer);
+
     const text = input.value.trim();
     if (!text && !currentImageBase64) return;
 
@@ -191,11 +211,11 @@ async function sendMessage() {
     const payload = { message: text, model: modelSelect.value, image: currentImageBase64 };
     
     // Reset UI
-    input.value = ""; currentImageBase64 = null;
+    input.value = ""; 
+    currentImageBase64 = null;
     inputWrapper.classList.remove("preview-active");
     toggleSendButton();
 
-    // Loading...
     const loader = document.createElement("div");
     loader.className = "msg bot"; loader.innerText = "...";
     chatBox.appendChild(loader);
@@ -212,7 +232,6 @@ async function sendMessage() {
         const botReply = data.reply || data.response;
         addMessage(botReply, "bot");
         
-        // Speak if enabled
         if (isVoiceOutputEnabled) {
             speakText(botReply);
         }

@@ -32,7 +32,7 @@ async function sendMessage() {
 
     try {
         // --- THIS IS WHERE YOU CONNECT TO YOUR BACKEND ---
-        const response = await fetch('YOUR_API_ENDPOINT_HERE', {
+        const response = await fetch('https://hybrid-ani.onrender.com/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

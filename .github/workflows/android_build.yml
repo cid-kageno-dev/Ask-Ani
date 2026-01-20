@@ -1,14 +1,12 @@
 name: Build and Release APK
 
 on:
-  # Trigger when you Publish a Release in GitHub UI
   release:
     types: [published]
-  # Also keep manual trigger for testing
   workflow_dispatch:
 
 permissions:
-  contents: write # Required to upload files to the release
+  contents: write # REQUIRED to let the script upload files to the release
 
 jobs:
   build:
@@ -30,18 +28,18 @@ jobs:
         with:
           node-version: '18'
 
-      # 3. Setup Gradle 8.1.1 (Prevents XmlParser crash)
+      # 3. Setup Gradle 8.1.1
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.1.1'
 
-      # 4. Install Build Tools 33.0.2 (Prevents "Missing build tools" error)
+      # 4. Install Android Build Tools
       - name: Install Android Build Tools
         run: |
           echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33"
 
-      # 5. Setup Cordova Project
+      # 5. Setup Cordova
       - name: Setup Cordova Project
         run: |
           npm install -g cordova
@@ -58,7 +56,7 @@ jobs:
           cordova platform add android@12.0.0
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 6. Inject Code & Fix Config (No Google Services)
+      # 6. Configure App (No Google Services)
       - name: Configure App
         run: |
           rm -rf app/www/*
@@ -66,7 +64,7 @@ jobs:
           cp style.css app/www/
           cp main.js app/www/
           
-          # Enable AndroidX, remove Google Services
+          # Enable AndroidX
           cd app
           sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n</widget>|' config.xml
 
@@ -78,17 +76,18 @@ jobs:
           cd app
           cordova build android --debug --no-telemetry
 
-      # 8. NEW: Attach APK to your Release
+      # 8. UPLOAD FIX: Use Wildcard to find the APK
       - name: Upload APK to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: app/platforms/android/app/build/outputs/apk/debug/app.apk
+          files: |
+            **/*.apk
 
-      # 9. Keep Artifacts (for manual runs)
+      # 9. Artifact Backup
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AniChat
-          path: app/platforms/android/app/build/outputs/apk/debug/app.apk
+          name: AniChat-Debug
+          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
           

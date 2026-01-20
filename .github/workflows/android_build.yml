@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # REQUIRED to let the script upload files to the release
+  contents: write
 
 jobs:
   build:
@@ -34,7 +34,7 @@ jobs:
         with:
           gradle-version: '8.1.1'
 
-      # 4. Install Android Build Tools
+      # 4. Install Build Tools
       - name: Install Android Build Tools
         run: |
           echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33"
@@ -52,11 +52,11 @@ jobs:
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Platform & Adapter
+          # Platform
           cordova platform add android@12.0.0
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 6. Configure App (No Google Services)
+      # 6. Configure App
       - name: Configure App
         run: |
           rm -rf app/www/*
@@ -76,15 +76,17 @@ jobs:
           cd app
           cordova build android --debug --no-telemetry
 
-      # 8. UPLOAD FIX: Use Wildcard to find the APK
+      # 8. UPLOAD FIX: Force Overwrite Mode
       - name: Upload APK to Release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: ncipollo/release-action@v1
         with:
-          files: |
-            **/*.apk
+          artifacts: "**/*.apk"
+          allowUpdates: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 9. Artifact Backup
+      # 9. Backup Artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

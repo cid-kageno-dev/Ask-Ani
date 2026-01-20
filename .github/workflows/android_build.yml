@@ -13,7 +13,7 @@ jobs:
       # 1. Check out your code
       - uses: actions/checkout@v3
 
-      # 2. Setup Java 17 (Required for Android 12+)
+      # 2. Setup Java 17 (Required for modern builds)
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -35,35 +35,37 @@ jobs:
           cordova create app com.cidkageno.anichat "Ani Chat"
           cd app
           
-          # Add Plugins FIRST
+          # Add Plugins
           cordova plugin add cordova-plugin-media
           cordova plugin add cordova-plugin-file
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Add Android Platform (Version 12.0.0 is the most stable sweet spot)
+          # Use Android 12.0.0 (Stable)
           cordova platform add android@12.0.0
           
-          # Add Adapter LAST (To patch the plugins above)
+          # Add Adapter to fix plugin conflicts
           cordova plugin add cordova-plugin-androidx-adapter
 
       # 5. Inject YOUR Code & Force AndroidX
       - name: Configure App
         run: |
-          # 1. Remove default files
+          # Remove default files
           rm -rf app/www/*
           
-          # 2. Copy your files
+          # Copy your files
           cp index.html app/www/
           cp style.css app/www/
           cp main.js app/www/
           
-          # 3. FORCE AndroidX in config.xml (Crucial Fix)
+          # FORCE AndroidX in config.xml
           cd app
           sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n<preference name="GradlePluginGoogleServicesEnabled" value="true" />\n</widget>|' config.xml
 
-      # 6. Build the APK
+      # 6. Build the APK (forcing Gradle 8.2.1 to fix XmlParser error)
       - name: Build Android APK
+        env:
+          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: "https://services.gradle.org/distributions/gradle-8.2.1-all.zip"
         run: |
           cd app
           cordova build android --debug --no-telemetry

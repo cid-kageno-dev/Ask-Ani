@@ -12,13 +12,14 @@ function renderNavbar() {
                         <option value="gpt-4">GPT-4 (Smart)</option>
                         <option value="gpt-3.5">GPT-3.5 (Fast)</option>
                         <option value="claude-3">Claude 3</option>
+                        <option value="gemini-pro">Gemini Pro</option>
                     </select>
                     <i class="fa-solid fa-chevron-down"></i>
                 </div>
                 <div class="status" style="font-size: 11px; color: #23a559;">● Online</div>
             </div>
         </div>
-        <button class="icon-btn" id="live-btn"><i class="fa-solid fa-headphones"></i></button>
+        <button class="icon-btn" id="voice-toggle-btn"><i class="fa-solid fa-volume-high"></i></button>
     </header>
     `;
 }
@@ -50,116 +51,21 @@ const chatBox = document.getElementById("chat-box");
 const input = document.getElementById("msg-input");
 const sendBtn = document.getElementById("send-btn");
 const micBtn = document.getElementById("mic-btn");
-const liveBtn = document.getElementById("live-btn"); // New Headphone Button
 const uploadBtn = document.getElementById("upload-btn");
 const fileInput = document.getElementById("image-upload");
 const modelSelect = document.getElementById("model-selector");
 const inputWrapper = document.getElementById("input-wrapper");
 const imgPreview = document.getElementById("img-preview");
+const voiceToggleBtn = document.getElementById("voice-toggle-btn");
 
 // State
 let currentImageBase64 = null;
-let isLiveMode = false;     // Are we in continuous conversation?
-let silenceTimer = null;    // Timer to detect when user stops talking
-const SILENCE_DELAY = 2000; // Wait 2 seconds of silence before sending
-const API_URL = "https://hybrid-ani.onrender.com/chat"; // YOUR BACKEND URL
+let isVoiceOutputEnabled = true;
+const API_URL = "https://hybrid-ani.onrender.com/chat"; // Change to your Backend URL
 
 /* ====================================
-   SPEECH RECOGNITION SETUP
+   IMAGE INPUT LOGIC
    ==================================== */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition;
-
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.continuous = false; // We handle the loop manually
-    recognition.lang = "en-US";
-    recognition.interimResults = true; // See text while talking
-
-    recognition.onstart = () => {
-        if (!isLiveMode) micBtn.classList.add("mic-active");
-    };
-
-    recognition.onend = () => {
-        micBtn.classList.remove("mic-active");
-        // If in Live Mode and we didn't just send a message, restart listening
-        // (Logic handled in processLiveVoice)
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = Array.from(event.results)
-            .map(result => result[0].transcript)
-            .join('');
-
-        // Show text in input
-        input.value = transcript;
-        input.dispatchEvent(new Event('input')); // Trigger resize
-
-        // LIVE MODE LOGIC: Detect Silence
-        if (isLiveMode) {
-            clearTimeout(silenceTimer); // User is still talking, reset timer
-            
-            // If silence for 2 seconds, assume done and send
-            silenceTimer = setTimeout(() => {
-                recognition.stop();
-                sendMessage(); // Auto-send
-            }, SILENCE_DELAY);
-        }
-    };
-}
-
-/* ====================================
-   LIVE MODE TOGGLE (Headphones)
-   ==================================== */
-liveBtn.onclick = () => {
-    isLiveMode = !isLiveMode;
-    
-    if (isLiveMode) {
-        liveBtn.classList.add("live-active");
-        document.body.classList.add("live-mode-on");
-        addMessage("<i>Live Mode On. Just start speaking...</i>", "bot");
-        recognition.start(); // Start listening immediately
-    } else {
-        liveBtn.classList.remove("live-active");
-        document.body.classList.remove("live-mode-on");
-        recognition.stop();
-        window.speechSynthesis.cancel(); // Stop AI talking
-        clearTimeout(silenceTimer);
-    }
-};
-
-/* ====================================
-   TEXT-TO-SPEECH (Voice Output)
-   ==================================== */
-function speakText(text) {
-    window.speechSynthesis.cancel();
-    
-    // clean text (remove markdown * or #) for cleaner speech
-    const cleanText = text.replace(/[*#]/g, '');
-    
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    utterance.onend = () => {
-        // IMPORTANT: When AI finishes talking, if Live Mode is ON, listen again.
-        if (isLiveMode) {
-            setTimeout(() => {
-                try { recognition.start(); } catch(e) {} // Restart Mic
-            }, 500); 
-        }
-    };
-
-    window.speechSynthesis.speak(utterance);
-}
-
-/* ====================================
-   STANDARD INPUT LOGIC
-   ==================================== */
-// Mic Button (Single Press)
-micBtn.onclick = () => {
-    if (isLiveMode) return; // Disable manual mic if in live mode
-    recognition.start();
-};
-
 uploadBtn.onclick = () => fileInput.click();
 
 fileInput.onchange = (e) => {
@@ -167,7 +73,7 @@ fileInput.onchange = (e) => {
     if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            currentImageBase64 = e.target.result;
+            currentImageBase64 = e.target.result; // Save Base64
             imgPreview.src = currentImageBase64;
             inputWrapper.classList.add("preview-active");
             toggleSendButton();
@@ -177,27 +83,89 @@ fileInput.onchange = (e) => {
 };
 
 /* ====================================
+   VOICE INPUT (Speech-to-Text)
+   ==================================== */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition;
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => micBtn.classList.add("mic-active");
+    recognition.onend = () => micBtn.classList.remove("mic-active");
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        input.value += transcript + " ";
+        toggleSendButton();
+        input.focus();
+    };
+
+    micBtn.onclick = () => recognition.start();
+} else {
+    micBtn.style.display = "none"; // Hide if not supported
+}
+
+/* ====================================
+   VOICE OUTPUT (Text-to-Speech)
+   ==================================== */
+voiceToggleBtn.onclick = () => {
+    isVoiceOutputEnabled = !isVoiceOutputEnabled;
+    voiceToggleBtn.innerHTML = isVoiceOutputEnabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+};
+
+function speakText(text) {
+    if (!isVoiceOutputEnabled) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    // utterance.voice = ... (Optional: Select a specific voice)
+    window.speechSynthesis.speak(utterance);
+}
+
+/* ====================================
    CHAT LOGIC
    ==================================== */
 function toggleSendButton() {
-    if(input.value.trim() || currentImageBase64) {
-        sendBtn.style.display = "flex"; micBtn.style.display = "none";
+    const hasText = input.value.trim().length > 0;
+    const hasImage = currentImageBase64 !== null;
+    
+    if (hasText || hasImage) {
+        sendBtn.style.display = "flex";
+        micBtn.style.display = "none";
     } else {
-        sendBtn.style.display = "none"; micBtn.style.display = "flex";
+        sendBtn.style.display = "none";
+        micBtn.style.display = "flex";
     }
 }
 
 input.addEventListener('input', () => {
-    input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px';
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
     toggleSendButton();
 });
 
 function addMessage(text, type, imgData = null) {
     const div = document.createElement("div");
     div.className = `msg ${type}`;
+
     let content = "";
-    if (imgData) content += `<img src="${imgData}" class="chat-img"><br>`;
-    if (text) content += `<span>${text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</span>`;
+    
+    // 1. If there is an image, show it
+    if (imgData) {
+        content += `<img src="${imgData}" class="chat-img"><br>`;
+    }
+
+    // 2. Format Text (Markdown-ish)
+    if (text) {
+        let formatted = text
+            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>') // Link
+            .replace(/\n/g, '<br>'); // Newlines
+        content += `<span>${formatted}</span>`;
+    }
+
     div.innerHTML = content;
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -205,42 +173,52 @@ function addMessage(text, type, imgData = null) {
 
 async function sendMessage() {
     const text = input.value.trim();
+    const model = modelSelect.value; // GET SELECTED MODEL
+    
     if (!text && !currentImageBase64) return;
 
-    // 1. UI Updates
+    // Add User Message to Chat
     addMessage(text, "user", currentImageBase64);
-    const payload = { message: text, model: modelSelect.value, image: currentImageBase64 };
-    
-    input.value = ""; currentImageBase64 = null;
+
+    // Prepare Payload
+    const payload = {
+        message: text,
+        model: model,
+        image: currentImageBase64 // Sending Base64 string to backend
+    };
+
+    // Reset Input
+    input.value = "";
+    currentImageBase64 = null;
     inputWrapper.classList.remove("preview-active");
+    input.style.height = 'auto';
     toggleSendButton();
 
-    // 2. Show Loading
+    // Show Loading
     const loader = document.createElement("div");
-    loader.className = "msg bot"; loader.innerText = "...";
+    loader.className = "msg bot";
+    loader.innerText = "...";
     chatBox.appendChild(loader);
 
-    // 3. API Call
     try {
         const res = await fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
+        
         const data = await res.json();
         loader.remove();
         
-        const botReply = data.reply || data.response;
+        const botReply = data.reply || data.response || "No response";
         addMessage(botReply, "bot");
         
-        // 4. Speak Result (Auto-triggers listening again if Live Mode is on)
-        if (isLiveMode) {
-            speakText(botReply);
-        }
+        // Speak response
+        speakText(botReply);
 
     } catch (err) {
         loader.remove();
-        addMessage("Error connecting.", "bot");
+        addMessage("Error connecting to Ani.", "bot");
     }
 }
 

@@ -109,12 +109,48 @@ if (SpeechRecognition) {
 }
 
 /* ====================================
-   VOICE OUTPUT (Text-to-Speech)
+   VOICE OUTPUT (Smart Native Selection)
    ==================================== */
-voiceToggleBtn.onclick = () => {
-    isVoiceOutputEnabled = !isVoiceOutputEnabled;
-    voiceToggleBtn.innerHTML = isVoiceOutputEnabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+let availableVoices = [];
+
+// Load voices when they are ready
+window.speechSynthesis.onvoiceschanged = () => {
+    availableVoices = window.speechSynthesis.getVoices();
 };
+
+function speakText(text) {
+    if (!isVoiceOutputEnabled) return;
+    
+    window.speechSynthesis.cancel();
+    
+    const cleanText = text.replace(/[*#]/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+
+    // INTELLIGENT VOICE SELECTION
+    // Tries to find Google US English (Android) or Samantha (iOS) or Microsoft Zira (PC)
+    const preferredVoice = availableVoices.find(voice => 
+        voice.name.includes("Google US English") || 
+        voice.name.includes("Samantha") ||
+        voice.name.includes("Zira")
+    );
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    // Pitch and Rate tweaks for more natural sound
+    utterance.pitch = 1.0; 
+    utterance.rate = 1.0; 
+
+    // Live Mode Logic
+    utterance.onend = () => {
+        if (isLiveMode) {
+            setTimeout(() => {
+                try { recognition.start(); } catch(e) {}
+            }, 500); 
+        }
+    };
+
+    window.speechSynthesis.speak(utterance);
+}
 
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;

@@ -109,56 +109,45 @@ if (SpeechRecognition) {
 }
 
 /* ====================================
-   VOICE OUTPUT (Smart Native Selection)
+   VOICE OUTPUT (Free Android System Google)
    ==================================== */
 let availableVoices = [];
 
-// Load voices when they are ready
+// Wait for voices to load (Android loads them async)
 window.speechSynthesis.onvoiceschanged = () => {
     availableVoices = window.speechSynthesis.getVoices();
+    console.log("Voices loaded:", availableVoices);
 };
 
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;
     
     window.speechSynthesis.cancel();
-    
     const cleanText = text.replace(/[*#]/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
 
-    // INTELLIGENT VOICE SELECTION
-    // Tries to find Google US English (Android) or Samantha (iOS) or Microsoft Zira (PC)
-    const preferredVoice = availableVoices.find(voice => 
-        voice.name.includes("Google US English") || 
-        voice.name.includes("Samantha") ||
-        voice.name.includes("Zira")
+    // Filter for Google US English specifically
+    const googleVoice = availableVoices.find(v => 
+        v.name === "Google US English" || 
+        (v.name.includes("Google") && v.lang === "en-US")
     );
 
-    if (preferredVoice) utterance.voice = preferredVoice;
+    if (googleVoice) {
+        utterance.voice = googleVoice;
+        // Tweak slightly to sound less robotic
+        utterance.pitch = 1.05; 
+        utterance.rate = 1.1; 
+    }
 
-    // Pitch and Rate tweaks for more natural sound
-    utterance.pitch = 1.0; 
-    utterance.rate = 1.0; 
-
-    // Live Mode Logic
     utterance.onend = () => {
         if (isLiveMode) {
-            setTimeout(() => {
-                try { recognition.start(); } catch(e) {}
-            }, 500); 
+            setTimeout(() => { try { recognition.start(); } catch(e) {} }, 500); 
         }
     };
 
     window.speechSynthesis.speak(utterance);
 }
 
-function speakText(text) {
-    if (!isVoiceOutputEnabled) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    // utterance.voice = ... (Optional: Select a specific voice)
-    window.speechSynthesis.speak(utterance);
-}
 
 /* ====================================
    CHAT LOGIC

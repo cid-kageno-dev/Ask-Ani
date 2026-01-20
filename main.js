@@ -12,14 +12,14 @@ function renderNavbar() {
                         <option value="gpt-4">GPT-4 (Smart)</option>
                         <option value="gpt-3.5">GPT-3.5 (Fast)</option>
                         <option value="claude-3">Claude 3</option>
-                        <option value="gemini-pro">Gemini Pro</option>
                     </select>
                     <i class="fa-solid fa-chevron-down"></i>
                 </div>
                 <div class="status" style="font-size: 11px; color: #23a559;">● Online</div>
             </div>
         </div>
-        <button class="icon-btn" id="voice-toggle-btn"><i class="fa-solid fa-volume-high"></i></button>
+        <button class="icon-btn" id="voice-toggle-btn"><i class="fa-solid fa-volume-xmark"></i></button>
+        <button class="icon-btn" id="live-btn"><i class="fa-solid fa-headphones"></i></button>
     </header>
     `;
 }
@@ -51,6 +51,7 @@ const chatBox = document.getElementById("chat-box");
 const input = document.getElementById("msg-input");
 const sendBtn = document.getElementById("send-btn");
 const micBtn = document.getElementById("mic-btn");
+const liveBtn = document.getElementById("live-btn");
 const uploadBtn = document.getElementById("upload-btn");
 const fileInput = document.getElementById("image-upload");
 const modelSelect = document.getElementById("model-selector");
@@ -60,30 +61,17 @@ const voiceToggleBtn = document.getElementById("voice-toggle-btn");
 
 // State
 let currentImageBase64 = null;
-let isVoiceOutputEnabled = true;
-const API_URL = "https://hybrid-ani.onrender.com/chat"; // Change to your Backend URL
+let isLiveMode = false;     
+let silenceTimer = null;    
+const SILENCE_DELAY = 2500; // 2.5s silence detection
+const API_URL = "https://hybrid-ani.onrender.com/chat"; // YOUR BACKEND URL
+
+// --- VOICE SETTINGS (OFF BY DEFAULT) ---
+let isVoiceOutputEnabled = false; 
+const audioPlayer = new Audio();
 
 /* ====================================
-   IMAGE INPUT LOGIC
-   ==================================== */
-uploadBtn.onclick = () => fileInput.click();
-
-fileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            currentImageBase64 = e.target.result; // Save Base64
-            imgPreview.src = currentImageBase64;
-            inputWrapper.classList.add("preview-active");
-            toggleSendButton();
-        };
-        reader.readAsDataURL(file);
-    }
-};
-
-/* ====================================
-   VOICE INPUT (Speech-to-Text)
+   SPEECH RECOGNITION SETUP
    ==================================== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
@@ -92,63 +80,94 @@ if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.lang = "en-US";
+    recognition.interimResults = true;
 
-    recognition.onstart = () => micBtn.classList.add("mic-active");
-    recognition.onend = () => micBtn.classList.remove("mic-active");
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        input.value += transcript + " ";
-        toggleSendButton();
-        input.focus();
+    recognition.onstart = () => {
+        if (!isLiveMode) micBtn.classList.add("mic-active");
     };
 
-    micBtn.onclick = () => recognition.start();
-} else {
-    micBtn.style.display = "none"; // Hide if not supported
+    recognition.onend = () => {
+        micBtn.classList.remove("mic-active");
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+            .map(result => result[0].transcript)
+            .join('');
+
+        input.value = transcript;
+        input.dispatchEvent(new Event('input')); 
+
+        if (isLiveMode) {
+            clearTimeout(silenceTimer); 
+            silenceTimer = setTimeout(() => {
+                recognition.stop();
+                sendMessage();
+            }, SILENCE_DELAY);
+        }
+    };
 }
 
 /* ====================================
-   VOICE OUTPUT (Google Translate Hack - 100% Free)
+   VOICE TOGGLE & LIVE MODE
    ==================================== */
-const audioPlayer = new Audio();
-let isSpeaking = false;
-
+// Toggle Voice Output
 voiceToggleBtn.onclick = () => {
     isVoiceOutputEnabled = !isVoiceOutputEnabled;
+    
+    // Switch Icon
     voiceToggleBtn.innerHTML = isVoiceOutputEnabled 
         ? '<i class="fa-solid fa-volume-high"></i>' 
         : '<i class="fa-solid fa-volume-xmark"></i>';
+
     if(!isVoiceOutputEnabled) {
         audioPlayer.pause();
         audioPlayer.currentTime = 0;
     }
 };
 
+// Toggle Live Mode
+liveBtn.onclick = () => {
+    isLiveMode = !isLiveMode;
+    
+    if (isLiveMode) {
+        liveBtn.classList.add("live-active");
+        document.body.classList.add("live-mode-on");
+        
+        // Auto-enable voice if Live Mode is turned on
+        if (!isVoiceOutputEnabled) voiceToggleBtn.click(); 
+        
+        addMessage("<i>Live Mode On. Just start speaking...</i>", "bot");
+        recognition.start();
+    } else {
+        liveBtn.classList.remove("live-active");
+        document.body.classList.remove("live-mode-on");
+        recognition.stop();
+        audioPlayer.pause();
+        clearTimeout(silenceTimer);
+    }
+};
+
+/* ====================================
+   TEXT-TO-SPEECH (Google Translate)
+   ==================================== */
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;
     
-    // Cancel any existing audio
     audioPlayer.pause();
 
-    // 1. Clean the text (remove emojis, *, #)
     const cleanText = text.replace(/[*#]/g, '').trim();
     if (!cleanText) return;
 
-    // 2. Construct the Google Translate URL
-    // client=tw-ob is the magic key for free access
+    // Google Translate TTS API (Free)
     const encodedText = encodeURIComponent(cleanText);
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
 
-    // 3. Play Audio
     audioPlayer.src = url;
-    audioPlayer.playbackRate = 1.1; // Make it slightly faster/natural
-    isSpeaking = true;
+    audioPlayer.playbackRate = 1.1; 
     audioPlayer.play();
 
-    // 4. Live Mode Logic (Restart Mic when done)
     audioPlayer.onended = () => {
-        isSpeaking = false;
         if (isLiveMode) {
             setTimeout(() => {
                 try { recognition.start(); } catch(e) {}
@@ -156,57 +175,59 @@ function speakText(text) {
         }
     };
     
-    // Fallback: If internet fails, use robot voice
     audioPlayer.onerror = () => {
+        // Fallback if Google fails
         const fallback = new SpeechSynthesisUtterance(cleanText);
         window.speechSynthesis.speak(fallback);
     };
 }
 
-
-
 /* ====================================
-   CHAT LOGIC
+   INPUT & UPLOAD LOGIC
    ==================================== */
+micBtn.onclick = () => {
+    if (isLiveMode) return;
+    recognition.start();
+};
+
+uploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentImageBase64 = e.target.result;
+            imgPreview.src = currentImageBase64;
+            inputWrapper.classList.add("preview-active");
+            toggleSendButton();
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
 function toggleSendButton() {
-    const hasText = input.value.trim().length > 0;
-    const hasImage = currentImageBase64 !== null;
-    
-    if (hasText || hasImage) {
-        sendBtn.style.display = "flex";
-        micBtn.style.display = "none";
+    if(input.value.trim() || currentImageBase64) {
+        sendBtn.style.display = "flex"; micBtn.style.display = "none";
     } else {
-        sendBtn.style.display = "none";
-        micBtn.style.display = "flex";
+        sendBtn.style.display = "none"; micBtn.style.display = "flex";
     }
 }
 
 input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = input.scrollHeight + 'px';
+    input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px';
     toggleSendButton();
 });
 
+/* ====================================
+   CHAT LOGIC
+   ==================================== */
 function addMessage(text, type, imgData = null) {
     const div = document.createElement("div");
     div.className = `msg ${type}`;
-
     let content = "";
-    
-    // 1. If there is an image, show it
-    if (imgData) {
-        content += `<img src="${imgData}" class="chat-img"><br>`;
-    }
-
-    // 2. Format Text (Markdown-ish)
-    if (text) {
-        let formatted = text
-            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
-            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>') // Link
-            .replace(/\n/g, '<br>'); // Newlines
-        content += `<span>${formatted}</span>`;
-    }
-
+    if (imgData) content += `<img src="${imgData}" class="chat-img"><br>`;
+    if (text) content += `<span>${text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</span>`;
     div.innerHTML = content;
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -214,31 +235,17 @@ function addMessage(text, type, imgData = null) {
 
 async function sendMessage() {
     const text = input.value.trim();
-    const model = modelSelect.value; // GET SELECTED MODEL
-    
     if (!text && !currentImageBase64) return;
 
-    // Add User Message to Chat
     addMessage(text, "user", currentImageBase64);
-
-    // Prepare Payload
-    const payload = {
-        message: text,
-        model: model,
-        image: currentImageBase64 // Sending Base64 string to backend
-    };
-
-    // Reset Input
-    input.value = "";
-    currentImageBase64 = null;
+    const payload = { message: text, model: modelSelect.value, image: currentImageBase64 };
+    
+    input.value = ""; currentImageBase64 = null;
     inputWrapper.classList.remove("preview-active");
-    input.style.height = 'auto';
     toggleSendButton();
 
-    // Show Loading
     const loader = document.createElement("div");
-    loader.className = "msg bot";
-    loader.innerText = "...";
+    loader.className = "msg bot"; loader.innerText = "...";
     chatBox.appendChild(loader);
 
     try {
@@ -247,19 +254,19 @@ async function sendMessage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-        
         const data = await res.json();
         loader.remove();
         
-        const botReply = data.reply || data.response || "No response";
+        const botReply = data.reply || data.response;
         addMessage(botReply, "bot");
         
-        // Speak response
-        speakText(botReply);
+        if (isLiveMode || isVoiceOutputEnabled) {
+            speakText(botReply);
+        }
 
     } catch (err) {
         loader.remove();
-        addMessage("Error connecting to Ani.", "bot");
+        addMessage("Error connecting.", "bot");
     }
 }
 

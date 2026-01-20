@@ -13,7 +13,7 @@ jobs:
       # 1. Check out your code
       - uses: actions/checkout@v3
 
-      # 2. Setup Java 17 (Required by modern Gradle)
+      # 2. Setup Java 17 (Required for Android 12+)
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -35,33 +35,37 @@ jobs:
           cordova create app com.cidkageno.anichat "Ani Chat"
           cd app
           
-          # USE ANDROID 13.0.0 (Critical: Supports JDK 17)
-          cordova platform add android@13.0.0
-          
-          # Add Plugins
+          # Add Plugins FIRST
           cordova plugin add cordova-plugin-media
           cordova plugin add cordova-plugin-file
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Adapter to fix plugin conflicts
-          cordova plugin add cordova-plugin-androidx
+          # Add Android Platform (Version 12.0.0 is the most stable sweet spot)
+          cordova platform add android@12.0.0
+          
+          # Add Adapter LAST (To patch the plugins above)
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 5. Inject YOUR Code
-      - name: Copy Web Files
+      # 5. Inject YOUR Code & Force AndroidX
+      - name: Configure App
         run: |
+          # 1. Remove default files
           rm -rf app/www/*
+          
+          # 2. Copy your files
           cp index.html app/www/
           cp style.css app/www/
           cp main.js app/www/
+          
+          # 3. FORCE AndroidX in config.xml (Crucial Fix)
+          cd app
+          sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n<preference name="GradlePluginGoogleServicesEnabled" value="true" />\n</widget>|' config.xml
 
-      # 6. Build the APK (With extra flags for stability)
+      # 6. Build the APK
       - name: Build Android APK
         run: |
           cd app
-          # Set environment variable to avoid legacy gradle issues
-          export CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL="https://services.gradle.org/distributions/gradle-8.7-all.zip"
           cordova build android --debug --no-telemetry
 
       # 7. Upload the APK

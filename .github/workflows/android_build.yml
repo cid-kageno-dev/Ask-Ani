@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # 1. Setup Java 17 (Required for Android 12)
+      # 1. Setup Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -25,33 +25,35 @@ jobs:
         with:
           node-version: '18'
 
-      # 3. CRITICAL FIX: Install Gradle 8.1.1 System-Wide
-      # This fixes "XmlParser" error by ensuring we don't use Gradle 9.x
+      # 3. Setup Gradle 8.1.1 (Kept from previous fix)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.1.1'
 
-      # 4. Install Cordova & Create Project
+      # 4. CRITICAL FIX: Install Missing Android Build Tools 33.0.2
+      - name: Install Android Build Tools
+        run: |
+          echo "y" | sdkmanager "build-tools;33.0.2" "platforms;android-33"
+
+      # 5. Install Cordova & Create Project
       - name: Setup Cordova Project
         run: |
           npm install -g cordova
           cordova create app com.cidkageno.anichat "Ani Chat"
           cd app
           
-          # Install Plugins
+          # Plugins
           cordova plugin add cordova-plugin-media
           cordova plugin add cordova-plugin-file
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Install Platform (Use stable 12.0.0)
+          # Platform
           cordova platform add android@12.0.0
-          
-          # Install Adapter (Fixes plugin errors)
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 5. Inject Code & Force Config
+      # 6. Inject Code & Force Config
       - name: Configure App
         run: |
           rm -rf app/www/*
@@ -63,8 +65,7 @@ jobs:
           cd app
           sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n<preference name="GradlePluginGoogleServicesEnabled" value="true" />\n</widget>|' config.xml
 
-      # 6. Build APK
-      # We set the Env Var as a backup to ensure Cordova respects our Gradle version
+      # 7. Build APK
       - name: Build Android APK
         env:
           CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: "https://services.gradle.org/distributions/gradle-8.1.1-all.zip"
@@ -72,10 +73,9 @@ jobs:
           cd app
           cordova build android --debug --no-telemetry
 
-      # 7. Upload Artifact
+      # 8. Upload Artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AniChat-Debug
           path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-          

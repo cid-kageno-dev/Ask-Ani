@@ -19,7 +19,6 @@ function renderNavbar() {
             </div>
         </div>
         <button class="icon-btn" id="voice-toggle-btn"><i class="fa-solid fa-volume-xmark"></i></button>
-        <button class="icon-btn" id="live-btn"><i class="fa-solid fa-headphones"></i></button>
     </header>
     `;
 }
@@ -51,7 +50,6 @@ const chatBox = document.getElementById("chat-box");
 const input = document.getElementById("msg-input");
 const sendBtn = document.getElementById("send-btn");
 const micBtn = document.getElementById("mic-btn");
-const liveBtn = document.getElementById("live-btn");
 const uploadBtn = document.getElementById("upload-btn");
 const fileInput = document.getElementById("image-upload");
 const modelSelect = document.getElementById("model-selector");
@@ -61,95 +59,60 @@ const voiceToggleBtn = document.getElementById("voice-toggle-btn");
 
 // State
 let currentImageBase64 = null;
-let isLiveMode = false;     
-let silenceTimer = null;    
-const SILENCE_DELAY = 2500; // 2.5s silence detection
 const API_URL = "https://hybrid-ani.onrender.com/chat"; // YOUR BACKEND URL
 
-// --- VOICE SETTINGS (OFF BY DEFAULT) ---
+// VOICE STATE (Off by default)
 let isVoiceOutputEnabled = false; 
 const audioPlayer = new Audio();
 
 /* ====================================
-   SPEECH RECOGNITION SETUP
+   SPEECH RECOGNITION (Dictation Only)
    ==================================== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
 
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognition.continuous = false; // Stop after one sentence
     recognition.lang = "en-US";
     recognition.interimResults = true;
 
-    recognition.onstart = () => {
-        if (!isLiveMode) micBtn.classList.add("mic-active");
-    };
-
-    recognition.onend = () => {
-        micBtn.classList.remove("mic-active");
-    };
+    recognition.onstart = () => micBtn.classList.add("mic-active");
+    recognition.onend = () => micBtn.classList.remove("mic-active");
 
     recognition.onresult = (event) => {
         const transcript = Array.from(event.results)
             .map(result => result[0].transcript)
             .join('');
-
         input.value = transcript;
-        input.dispatchEvent(new Event('input')); 
-
-        if (isLiveMode) {
-            clearTimeout(silenceTimer); 
-            silenceTimer = setTimeout(() => {
-                recognition.stop();
-                sendMessage();
-            }, SILENCE_DELAY);
-        }
+        input.dispatchEvent(new Event('input')); // Trigger resize logic
+        toggleSendButton();
     };
+
+    micBtn.onclick = () => recognition.start();
+} else {
+    micBtn.style.display = 'none'; // Hide if browser doesn't support it
 }
 
 /* ====================================
-   VOICE TOGGLE & LIVE MODE
+   VOICE TOGGLE
    ==================================== */
-// Toggle Voice Output
 voiceToggleBtn.onclick = () => {
     isVoiceOutputEnabled = !isVoiceOutputEnabled;
-    
-    // Switch Icon
+    // Update Icon
     voiceToggleBtn.innerHTML = isVoiceOutputEnabled 
         ? '<i class="fa-solid fa-volume-high"></i>' 
         : '<i class="fa-solid fa-volume-xmark"></i>';
-
+        
+    // Stop audio if turning off
     if(!isVoiceOutputEnabled) {
         audioPlayer.pause();
         audioPlayer.currentTime = 0;
     }
 };
 
-// Toggle Live Mode
-liveBtn.onclick = () => {
-    isLiveMode = !isLiveMode;
-    
-    if (isLiveMode) {
-        liveBtn.classList.add("live-active");
-        document.body.classList.add("live-mode-on");
-        
-        // Auto-enable voice if Live Mode is turned on
-        if (!isVoiceOutputEnabled) voiceToggleBtn.click(); 
-        
-        addMessage("<i>Live Mode On. Just start speaking...</i>", "bot");
-        recognition.start();
-    } else {
-        liveBtn.classList.remove("live-active");
-        document.body.classList.remove("live-mode-on");
-        recognition.stop();
-        audioPlayer.pause();
-        clearTimeout(silenceTimer);
-    }
-};
-
 /* ====================================
-   TEXT-TO-SPEECH (Google Translate)
+   TEXT-TO-SPEECH (Google Translate Free)
    ==================================== */
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;
@@ -159,37 +122,24 @@ function speakText(text) {
     const cleanText = text.replace(/[*#]/g, '').trim();
     if (!cleanText) return;
 
-    // Google Translate TTS API (Free)
+    // Google Translate TTS (Free API Hack)
     const encodedText = encodeURIComponent(cleanText);
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
 
     audioPlayer.src = url;
     audioPlayer.playbackRate = 1.1; 
     audioPlayer.play();
-
-    audioPlayer.onended = () => {
-        if (isLiveMode) {
-            setTimeout(() => {
-                try { recognition.start(); } catch(e) {}
-            }, 500); 
-        }
-    };
     
+    // Fallback
     audioPlayer.onerror = () => {
-        // Fallback if Google fails
         const fallback = new SpeechSynthesisUtterance(cleanText);
         window.speechSynthesis.speak(fallback);
     };
 }
 
 /* ====================================
-   INPUT & UPLOAD LOGIC
+   IMAGE & INPUT LOGIC
    ==================================== */
-micBtn.onclick = () => {
-    if (isLiveMode) return;
-    recognition.start();
-};
-
 uploadBtn.onclick = () => fileInput.click();
 
 fileInput.onchange = (e) => {
@@ -240,10 +190,12 @@ async function sendMessage() {
     addMessage(text, "user", currentImageBase64);
     const payload = { message: text, model: modelSelect.value, image: currentImageBase64 };
     
+    // Reset UI
     input.value = ""; currentImageBase64 = null;
     inputWrapper.classList.remove("preview-active");
     toggleSendButton();
 
+    // Loading...
     const loader = document.createElement("div");
     loader.className = "msg bot"; loader.innerText = "...";
     chatBox.appendChild(loader);
@@ -260,7 +212,8 @@ async function sendMessage() {
         const botReply = data.reply || data.response;
         addMessage(botReply, "bot");
         
-        if (isLiveMode || isVoiceOutputEnabled) {
+        // Speak if enabled
+        if (isVoiceOutputEnabled) {
             speakText(botReply);
         }
 

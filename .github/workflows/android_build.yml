@@ -1,9 +1,14 @@
-name: Build Android APK
+name: Build and Release APK
 
 on:
-  push:
-    branches: [ "main" ]
+  # Trigger when you Publish a Release in GitHub UI
+  release:
+    types: [published]
+  # Also keep manual trigger for testing
   workflow_dispatch:
+
+permissions:
+  contents: write # Required to upload files to the release
 
 jobs:
   build:
@@ -25,13 +30,13 @@ jobs:
         with:
           node-version: '18'
 
-      # 3. Setup Gradle 8.1.1 (This fixed the XmlParser error)
+      # 3. Setup Gradle 8.1.1 (Prevents XmlParser crash)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.1.1'
 
-      # 4. Install Build Tools (This fixed the "No build tools" error)
+      # 4. Install Build Tools 33.0.2 (Prevents "Missing build tools" error)
       - name: Install Android Build Tools
         run: |
           echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33"
@@ -49,11 +54,11 @@ jobs:
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Platform
+          # Platform & Adapter
           cordova platform add android@12.0.0
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 6. CRITICAL FIX: Removed "GoogleServices" to fix the .json error
+      # 6. Inject Code & Fix Config (No Google Services)
       - name: Configure App
         run: |
           rm -rf app/www/*
@@ -61,7 +66,7 @@ jobs:
           cp style.css app/www/
           cp main.js app/www/
           
-          # Manually enable AndroidX ONLY (Removed GoogleServicesEnabled)
+          # Enable AndroidX, remove Google Services
           cd app
           sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n</widget>|' config.xml
 
@@ -73,10 +78,17 @@ jobs:
           cd app
           cordova build android --debug --no-telemetry
 
-      # 8. Upload Artifact
-      - name: Upload APK
+      # 8. NEW: Attach APK to your Release
+      - name: Upload APK to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/platforms/android/app/build/outputs/apk/debug/app.apk
+
+      # 9. Keep Artifacts (for manual runs)
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AniChat-Debug
-          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          name: AniChat
+          path: app/platforms/android/app/build/outputs/apk/debug/app.apk
           

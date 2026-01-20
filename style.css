@@ -1,23 +1,103 @@
-/* Add to your existing style.css */
-
-/* HEADER STATUS INDICATORS */
-header .status {
-    color: #9496a1; /* Default/Offline color */
-    transition: color 0.3s ease;
+/* ===============================
+   VARS (Default = Dark Mode)
+   =============================== */
+:root {
+  --bg-dark: #050507;
+  --glass-panel: rgba(20, 20, 25, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff; 
+  --text-secondary: #9496a1;
+  --accent-primary: #5865F2; 
+  --accent-gradient: linear-gradient(135deg, #5865F2, #4752C4);
+  --bot-bubble: rgba(255, 255, 255, 0.08);
+  --online: #23a559;
+  --header-height: 60px;
 }
 
-/* When JS adds class="active" to the header */
-header.active .status {
-    color: #23a559; /* Online Green */
-    font-weight: 600;
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  background: var(--bg-dark);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text-primary); 
+  position: fixed; inset: 0; overflow: hidden;
 }
 
-/* MARKDOWN STYLES (Used by your JS addMessage function) */
-.clean-link {
-    color: #5865F2;
-    text-decoration: none;
-    border-bottom: 1px dashed rgba(88, 101, 242, 0.5);
+#app {
+  display: flex; flex-direction: column; width: 100%; height: 100%; 
+  max-width: 500px; margin: 0 auto; background: var(--glass-panel); position: relative;
 }
-.bot b {
-    color: #5865F2; /* Bold text in bot messages */
+
+/* HEADER & MODEL SELECTOR */
+header {
+  flex: 0 0 auto; height: var(--header-height); padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--glass-border);
+  background: rgba(15, 15, 25, 0.95); z-index: 100;
 }
+.profile-group { display: flex; align-items: center; gap: 12px; flex: 1; overflow: hidden;}
+.avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0;}
+.info { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+
+/* Model Dropdown Style */
+.model-select {
+  background: transparent; border: none; color: var(--text-primary);
+  font-size: 14px; font-weight: 600; cursor: pointer; padding: 0; margin: 0;
+  appearance: none; -webkit-appearance: none;
+}
+.model-wrapper { display: flex; align-items: center; gap: 4px; }
+.model-wrapper i { font-size: 10px; color: var(--text-secondary); }
+
+/* CHAT BOX */
+#chat-box {
+  flex: 1 1 auto; overflow-y: auto; padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth;
+}
+.msg { max-width: 85%; padding: 10px 16px; font-size: 15px; border-radius: 20px; line-height: 1.5; word-wrap: break-word; }
+.bot { align-self: flex-start; background: var(--bot-bubble); border-bottom-left-radius: 4px; }
+.user { align-self: flex-end; background: var(--accent-gradient); color: white; border-bottom-right-radius: 4px; }
+
+/* Images in Chat */
+.chat-img { max-width: 100%; border-radius: 12px; margin-top: 8px; display: block; }
+
+/* INPUT AREA */
+#input-area {
+  flex: 0 0 auto; background: #0b0b10; border-top: 1px solid var(--glass-border);
+  padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex; align-items: flex-end; gap: 8px; z-index: 100;
+}
+
+/* Input Wrapper to hold Text + Preview */
+.input-wrapper {
+  flex: 1; background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 24px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+textarea {
+  width: 100%; background: transparent; border: none;
+  padding: 12px 14px; font-size: 16px; color: white; 
+  resize: none; max-height: 120px; font-family: inherit;
+}
+
+/* Image Preview inside Input */
+#img-preview-container {
+  display: none; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+#img-preview { height: 60px; border-radius: 8px; }
+.preview-active #img-preview-container { display: block; }
+
+/* Buttons */
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: transparent; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px;
+  flex-shrink: 0;
+}
+.icon-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+#send-btn { background: var(--accent-gradient); color: white; }
+#send-btn:disabled { opacity: 0.5; background: #333; }
+.mic-active { color: #fa4a4a !important; animation: pulse 1s infinite; }
+
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }

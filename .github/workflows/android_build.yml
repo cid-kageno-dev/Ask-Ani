@@ -25,16 +25,17 @@ jobs:
         with:
           node-version: '18'
 
-      # 3. Setup Gradle 8.1.1 (Kept from previous fix)
+      # 3. Setup Gradle 8.1.1
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.1.1'
 
-      # 4. CRITICAL FIX: Install Missing Android Build Tools 33.0.2
+      # 4. CRITICAL FIX: Install Build Tools using FULL PATH
+      # We use ${ANDROID_HOME}... because sdkmanager is not in the PATH by default
       - name: Install Android Build Tools
         run: |
-          echo "y" | sdkmanager "build-tools;33.0.2" "platforms;android-33"
+          echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33"
 
       # 5. Install Cordova & Create Project
       - name: Setup Cordova Project
@@ -49,7 +50,7 @@ jobs:
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Platform
+          # Platform (Stable 12.0.0)
           cordova platform add android@12.0.0
           cordova plugin add cordova-plugin-androidx-adapter
 
@@ -79,3 +80,4 @@ jobs:
         with:
           name: AniChat-Debug
           path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          

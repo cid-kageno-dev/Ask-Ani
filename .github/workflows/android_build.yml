@@ -1,8 +1,9 @@
 name: Build and Release APK
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*' # Triggers when you push a tag like v1.2, v1.3, etc.
   workflow_dispatch:
 
 permissions:
@@ -76,20 +77,14 @@ jobs:
           cd app
           cordova build android --debug --no-telemetry
 
-      # 8. UPLOAD FIX: Force Overwrite Mode
-      - name: Upload APK to Release
-        if: github.event_name == 'release'
+      # 8. NEW: Bot Creates the Release + Uploads APK together
+      - name: Create Release and Upload APK
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "**/*.apk"
-          allowUpdates: true
-          replacesArtifacts: true
+          artifacts: "app/platforms/android/app/build/outputs/apk/debug/app-debug.apk"
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # 9. Backup Artifact
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AniChat-Debug
-          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          tag: ${{ github.ref_name }}
+          name: Ani Chat ${{ github.ref_name }}
+          body: "Auto-generated release for ${{ github.ref_name }}"
+          allowUpdates: true
           

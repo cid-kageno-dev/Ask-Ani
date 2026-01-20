@@ -9,9 +9,9 @@ function renderNavbar() {
             <div class="info">
                 <div class="model-wrapper">
                     <select id="model-selector" class="model-select">
-                        <option value="gpt-4">GPT-4 (Smart)</option>
-                        <option value="gpt-3.5">GPT-3.5 (Fast)</option>
-                        <option value="claude-3">Claude 3</option>
+                        <option value="ani-3">Pro (Smart)</option>
+                        <option value="ani-2.5">Plus (Fast)</option>
+                        <option value="ani-v1">Basic </option>
                     </select>
                     <i class="fa-solid fa-chevron-down"></i>
                 </div>
@@ -244,3 +244,12 @@ async function sendMessage() {
 
 sendBtn.onclick = sendMessage;
 input.onkeydown = (e) => { if(e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }};
+
+/* ====================================
+   INITIALIZATION (Welcome Message)
+   ==================================== */
+window.onload = () => {
+    setTimeout(() => {
+        addMessage("Hi there! I'm Ani, an AI assistant created by Cid Kageno. How can I help you today? 💜", "bot");
+    }, 600);
+};

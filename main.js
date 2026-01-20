@@ -109,44 +109,60 @@ if (SpeechRecognition) {
 }
 
 /* ====================================
-   VOICE OUTPUT (Free Android System Google)
+   VOICE OUTPUT (Google Translate Hack - 100% Free)
    ==================================== */
-let availableVoices = [];
+const audioPlayer = new Audio();
+let isSpeaking = false;
 
-// Wait for voices to load (Android loads them async)
-window.speechSynthesis.onvoiceschanged = () => {
-    availableVoices = window.speechSynthesis.getVoices();
-    console.log("Voices loaded:", availableVoices);
+voiceToggleBtn.onclick = () => {
+    isVoiceOutputEnabled = !isVoiceOutputEnabled;
+    voiceToggleBtn.innerHTML = isVoiceOutputEnabled 
+        ? '<i class="fa-solid fa-volume-high"></i>' 
+        : '<i class="fa-solid fa-volume-xmark"></i>';
+    if(!isVoiceOutputEnabled) {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+    }
 };
 
 function speakText(text) {
     if (!isVoiceOutputEnabled) return;
     
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/[*#]/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    // Cancel any existing audio
+    audioPlayer.pause();
 
-    // Filter for Google US English specifically
-    const googleVoice = availableVoices.find(v => 
-        v.name === "Google US English" || 
-        (v.name.includes("Google") && v.lang === "en-US")
-    );
+    // 1. Clean the text (remove emojis, *, #)
+    const cleanText = text.replace(/[*#]/g, '').trim();
+    if (!cleanText) return;
 
-    if (googleVoice) {
-        utterance.voice = googleVoice;
-        // Tweak slightly to sound less robotic
-        utterance.pitch = 1.05; 
-        utterance.rate = 1.1; 
-    }
+    // 2. Construct the Google Translate URL
+    // client=tw-ob is the magic key for free access
+    const encodedText = encodeURIComponent(cleanText);
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
 
-    utterance.onend = () => {
+    // 3. Play Audio
+    audioPlayer.src = url;
+    audioPlayer.playbackRate = 1.1; // Make it slightly faster/natural
+    isSpeaking = true;
+    audioPlayer.play();
+
+    // 4. Live Mode Logic (Restart Mic when done)
+    audioPlayer.onended = () => {
+        isSpeaking = false;
         if (isLiveMode) {
-            setTimeout(() => { try { recognition.start(); } catch(e) {} }, 500); 
+            setTimeout(() => {
+                try { recognition.start(); } catch(e) {}
+            }, 500); 
         }
     };
-
-    window.speechSynthesis.speak(utterance);
+    
+    // Fallback: If internet fails, use robot voice
+    audioPlayer.onerror = () => {
+        const fallback = new SpeechSynthesisUtterance(cleanText);
+        window.speechSynthesis.speak(fallback);
+    };
 }
+
 
 
 /* ====================================

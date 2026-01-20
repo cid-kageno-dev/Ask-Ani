@@ -10,44 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Check out code
       - uses: actions/checkout@v3
 
-      # 2. Setup Java 17 (Required for Android)
+      # Setup Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. Setup Node.js
+      # Setup Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # 4. Install Cordova & Create Project
+      # Install Cordova & Create Project
       - name: Setup Cordova Project
         run: |
           npm install -g cordova
-          
-          # Create project
           cordova create app com.cidkageno.anichat "Ani Chat"
           cd app
           
-          # Add Plugins
+          # Plugins
           cordova plugin add cordova-plugin-media
           cordova plugin add cordova-plugin-file
           cordova plugin add cordova-plugin-camera
           cordova plugin add cordova-plugin-whitelist
           
-          # Add Platform (Stable 12.0.0)
+          # Platform
           cordova platform add android@12.0.0
-          
-          # Add Adapter LAST to fix plugin errors
           cordova plugin add cordova-plugin-androidx-adapter
 
-      # 5. Inject Code & Force Config
+      # Inject Your Code
       - name: Configure App
         run: |
           rm -rf app/www/*
@@ -55,12 +50,17 @@ jobs:
           cp style.css app/www/
           cp main.js app/www/
           
-          # Manually enable AndroidX in config.xml
+          # Enable AndroidX in config
           cd app
           sed -i 's|</widget>|<preference name="AndroidXEnabled" value="true" />\n<preference name="GradlePluginGoogleServicesEnabled" value="true" />\n</widget>|' config.xml
 
-      # 6. CRITICAL FIX: Manually Overwrite Gradle Version
-      # GitHub uses Gradle 9.x by default, which crashes. We force 8.1.1 here.
+      # NEW STEP: Generate Build Files (Fixes "No such file" error)
+      - name: Prepare Android Platform
+        run: |
+          cd app
+          cordova prepare android
+
+      # OVERWRITE GRADLE (Forces downgrade to 8.1.1 to fix crash)
       - name: Force Gradle 8.1.1
         run: |
           cd app/platforms/android/gradle/wrapper
@@ -70,17 +70,16 @@ jobs:
           echo "zipStorePath=wrapper/dists" >> gradle-wrapper.properties
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.1.1-all.zip" >> gradle-wrapper.properties
 
-      # 7. Build APK
+      # Build APK
       - name: Build Android APK
         run: |
           cd app
           cordova build android --debug --no-telemetry
 
-      # 8. Upload Artifact
+      # Upload
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AniChat-Debug
           path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-
           
